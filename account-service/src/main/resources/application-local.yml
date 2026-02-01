@@ -1,0 +1,15 @@
+# application-local.yml — overrides for local development
+# Do NOT commit real secrets. Copy .env.example to .env and fill in values.
+
+spring:
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    com.paycore.accountservice: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG

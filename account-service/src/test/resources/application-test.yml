@@ -1,0 +1,29 @@
+# application-test.yml — overrides for unit/integration tests
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    database-platform: org.hibernate.dialect.H2Dialect
+
+  flyway:
+    enabled: false
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+jwt:
+  private-key-path: classpath:keys/test-private.pem
+  public-key-path: classpath:keys/test-public.pem
+  access-token-expiration-ms: 60000
+  refresh-token-expiration-ms: 120000
+
+eureka:
+  client:
+    enabled: false

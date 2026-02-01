@@ -1,0 +1,31 @@
+# Maven
+target/
+*.class
+*.jar
+*.war
+
+# Maven wrapper cache
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Environment / secrets
+.env
+*.p12
+*.jks
+src/main/resources/keys/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+postgres-data/

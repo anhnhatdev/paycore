@@ -1,0 +1,49 @@
+version: '3.9'
+
+services:
+  account-db:
+    image: postgres:16-alpine
+    container_name: paycore-account-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: account_db
+      POSTGRES_USER: paycore
+      POSTGRES_PASSWORD: paycore123
+    ports:
+      - "5432:5432"
+    volumes:
+      - account-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paycore -d account_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  account-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: paycore-account-service
+    restart: unless-stopped
+    depends_on:
+      account-db:
+        condition: service_healthy
+    environment:
+      DB_HOST: account-db
+      DB_PORT: 5432
+      DB_NAME: account_db
+      DB_USERNAME: paycore
+      DB_PASSWORD: paycore123
+      SERVER_PORT: 8081
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      EUREKA_SERVER_URL: ${EUREKA_SERVER_URL:-http://eureka-server:8761/eureka/}
+      JWT_PRIVATE_KEY_PATH: classpath:keys/private.pem
+      JWT_PUBLIC_KEY_PATH: classpath:keys/public.pem
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./keys:/app/keys:ro
+
+volumes:
+  account-db-data:
+    driver: local
