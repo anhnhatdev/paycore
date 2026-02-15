@@ -15,7 +15,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Version
 public class Account {
 
     @Id

@@ -244,7 +244,7 @@ class AuthServiceTest {
 
         assertTrue(storedToken.isRevoked(), "Old refresh token must be revoked during rotation");
         verify(refreshTokenRepository).save(storedToken);
-        verify(refreshTokenRepository, times(1)).save(any(RefreshToken.class));
+        verify(refreshTokenRepository, times(2)).save(any(RefreshToken.class));
     }
 
     @Test
