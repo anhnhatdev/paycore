@@ -1,0 +1,5 @@
+# Production profile — self-preservation enabled for network partition resilience
+eureka:
+  server:
+    enable-self-preservation: true
+    eviction-interval-timer-in-ms: 60000

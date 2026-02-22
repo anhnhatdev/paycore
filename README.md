@@ -76,10 +76,10 @@ flowchart TD
 | Service | Port | Database | Responsibilities | Status |
 |---|---|---|---|---|
 | 🔐 **`account-service`** | `8081` | `account_db` | Authentication (RS256), KYC status, User profiles, Wallet lifecycle, Token rotation | ✅ **Completed** |
+| 🧭 **`eureka-server`** | `8761` | — | Dynamic service registration & discovery, health check monitoring | ✅ **Completed** |
 | 📖 **`ledger-service`** | `8082` | `ledger_db` | Double-entry bookkeeping, Balance single source of truth, Immutable journal entries | 🔄 Next |
 | 💸 **`transaction-service`** | `8083` | `transaction_db` | Fund transfers, Deposit/Withdraw flows, Saga state machine, Outbox processor | 🔄 Planned |
 | 🚪 **`api-gateway`** | `8080` | — | Single public entry point, Rate limiting, Token inspection, Route dispatching | 🔄 Planned |
-| 🧭 **`eureka-server`** | `8761` | — | Dynamic service registration & discovery, health check monitoring | 🔄 Planned |
 
 ---
 
