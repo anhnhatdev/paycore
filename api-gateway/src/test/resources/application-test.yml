@@ -1,0 +1,47 @@
+server:
+  port: 0
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+jwt:
+  public-key-path: classpath:keys/test-public.pem
+
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: false
+      routes:
+        - id: deny-internal-test
+          uri: http://localhost:9999
+          predicates:
+            - Path=/internal/**
+          filters:
+            - name: DenyPublicAccess
+
+        - id: test-public-route
+          uri: http://localhost:9999
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - name: JwtAuth
+
+        - id: test-protected-route
+          uri: http://localhost:9999
+          predicates:
+            - Path=/api/v1/accounts/**
+          filters:
+            - name: JwtAuth
+
+        - id: test-transactions-route
+          uri: http://localhost:9999
+          predicates:
+            - Path=/api/v1/transactions/**
+          filters:
+            - name: JwtAuth
+            - name: IdempotencyKeyRequired
