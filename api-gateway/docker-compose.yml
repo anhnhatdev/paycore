@@ -1,0 +1,26 @@
+version: '3.9'
+
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: paycore-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: 8080
+      EUREKA_URI: http://eureka-server:8761/eureka/
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
