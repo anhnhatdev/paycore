@@ -16,6 +16,7 @@
         <module>account-service</module>
         <module>eureka-server</module>
         <module>api-gateway</module>
+        <module>ledger-service</module>
     </modules>
 
     <properties>
