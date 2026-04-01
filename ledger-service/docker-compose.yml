@@ -1,0 +1,53 @@
+version: '3.9'
+
+services:
+  ledger-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: paycore-ledger-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      SERVER_PORT: 8082
+      DB_HOST: postgres-ledger
+      DB_PORT: 5432
+      DB_NAME: ledger_db
+      DB_USER: paycore
+      DB_PASSWORD: paycore_secret
+      EUREKA_URI: http://eureka-server:8761/eureka/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      postgres-ledger:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8082/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-ledger:
+    image: postgres:16-alpine
+    container_name: paycore-postgres-ledger
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: ledger_db
+      POSTGRES_USER: paycore
+      POSTGRES_PASSWORD: paycore_secret
+    volumes:
+      - ledger_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paycore -d ledger_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  ledger_pgdata:
