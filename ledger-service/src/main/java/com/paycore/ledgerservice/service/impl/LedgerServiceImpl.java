@@ -38,6 +38,7 @@ public class LedgerServiceImpl implements LedgerService {
     private final ObjectMapper objectMapper;
 
     @Override
+    @Transactional
     public CreateLedgerEntryResponse processDoubleEntry(CreateLedgerEntryRequest request) {
         // 1. Pre-validation
         if (request.getDebitAccountId().equals(request.getCreditAccountId())) {

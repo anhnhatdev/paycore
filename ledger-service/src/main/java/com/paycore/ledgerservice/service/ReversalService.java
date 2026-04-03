@@ -34,6 +34,7 @@ public class ReversalService {
     private final IdempotencyManager idempotencyManager;
     private final ObjectMapper objectMapper;
 
+    @Transactional
     public ReverseLedgerEntryResponse processReversal(ReverseLedgerEntryRequest request) {
         // Phase 0: Idempotency check
         Optional<IdempotencySnapshot> snapshotOpt = idempotencyManager.startOrCheckIdempotency(

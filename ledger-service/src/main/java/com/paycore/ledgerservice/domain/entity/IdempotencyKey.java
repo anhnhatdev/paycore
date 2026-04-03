@@ -34,13 +34,13 @@ public class IdempotencyKey {
     @Builder.Default
     private IdempotencyStatus status = IdempotencyStatus.PROCESSING;
 
-    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
+    @Builder.Default
+    private Instant createdAt = Instant.now();
 
-    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
+    @Builder.Default
+    private Instant updatedAt = Instant.now();
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
