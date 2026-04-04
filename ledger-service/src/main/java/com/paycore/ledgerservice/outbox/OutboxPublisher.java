@@ -40,14 +40,16 @@ public class OutboxPublisher {
 
         for (OutboxEvent event : unpublished) {
             try {
-                kafkaTemplate.send(ledgerEventsTopic, event.getAggregateId().toString(), event.getPayload())
-                        .whenComplete((result, ex) -> {
-                            if (ex == null) {
-                                log.debug("Dispatched outbox event {} to topic {}", event.getId(), ledgerEventsTopic);
-                            } else {
-                                log.error("Failed to dispatch outbox event {}: {}", event.getId(), ex.getMessage());
-                            }
-                        });
+                var future = kafkaTemplate.send(ledgerEventsTopic, event.getAggregateId().toString(), event.getPayload());
+                if (future != null) {
+                    future.whenComplete((result, ex) -> {
+                        if (ex == null) {
+                            log.debug("Dispatched outbox event {} to topic {}", event.getId(), ledgerEventsTopic);
+                        } else {
+                            log.error("Failed to dispatch outbox event {}: {}", event.getId(), ex.getMessage());
+                        }
+                    });
+                }
                 event.setPublished(true);
             } catch (Exception e) {
                 log.error("Exception during outbox publishing for event {}: {}", event.getId(), e.getMessage());

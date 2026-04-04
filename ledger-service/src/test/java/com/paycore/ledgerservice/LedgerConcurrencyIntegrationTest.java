@@ -149,4 +149,75 @@ class LedgerConcurrencyIntegrationTest {
         assertEquals(new BigDecimal("800000.00"), finalB.getAvailableBalance());
         assertEquals(new BigDecimal("1000000.00"), finalA.getAvailableBalance().add(finalB.getAvailableBalance()));
     }
+
+    @Test
+    @DisplayName("Bidirectional concurrent transfers (A->B and B->A) execute without deadlock due to deterministic locking order")
+    void bidirectionalConcurrentTransfers_PreventDeadlock() throws InterruptedException {
+        // Set both accounts to 1,000,000 VND
+        Balance balA = balanceRepository.findById(accountA).orElseThrow();
+        balA.setAvailableBalance(new BigDecimal("1000000.00"));
+        balanceRepository.save(balA);
+
+        Balance balB = balanceRepository.findById(accountB).orElseThrow();
+        balB.setAvailableBalance(new BigDecimal("1000000.00"));
+        balanceRepository.save(balB);
+
+        int threadCount = 2;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicInteger successCount = new AtomicInteger(0);
+
+        BigDecimal transferAmount = new BigDecimal("100000.00");
+
+        // A -> B
+        Callable<Void> taskAtoB = () -> {
+            latch.await();
+            ledgerService.processDoubleEntry(CreateLedgerEntryRequest.builder()
+                    .transactionId(UUID.randomUUID())
+                    .idempotencyKey(UUID.randomUUID().toString())
+                    .debitAccountId(accountA)
+                    .creditAccountId(accountB)
+                    .amount(transferAmount)
+                    .currency("VND")
+                    .build());
+            successCount.incrementAndGet();
+            return null;
+        };
+
+        // B -> A
+        Callable<Void> taskBtoA = () -> {
+            latch.await();
+            ledgerService.processDoubleEntry(CreateLedgerEntryRequest.builder()
+                    .transactionId(UUID.randomUUID())
+                    .idempotencyKey(UUID.randomUUID().toString())
+                    .debitAccountId(accountB)
+                    .creditAccountId(accountA)
+                    .amount(transferAmount)
+                    .currency("VND")
+                    .build());
+            successCount.incrementAndGet();
+            return null;
+        };
+
+        Future<Void> f1 = executor.submit(taskAtoB);
+        Future<Void> f2 = executor.submit(taskBtoA);
+
+        latch.countDown();
+
+        try {
+            f1.get(10, TimeUnit.SECONDS);
+            f2.get(10, TimeUnit.SECONDS);
+        } catch (Exception ignored) {}
+
+        executor.shutdown();
+
+        assertEquals(2, successCount.get(), "Both bidirectional transfers must complete without deadlock");
+
+        Balance finalA = balanceRepository.findById(accountA).orElseThrow();
+        Balance finalB = balanceRepository.findById(accountB).orElseThrow();
+
+        assertEquals(new BigDecimal("1000000.00"), finalA.getAvailableBalance());
+        assertEquals(new BigDecimal("1000000.00"), finalB.getAvailableBalance());
+        assertEquals(new BigDecimal("2000000.00"), finalA.getAvailableBalance().add(finalB.getAvailableBalance()));
+    }
 }

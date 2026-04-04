@@ -53,6 +53,12 @@ class DoubleEntryLedgerTest {
     @Autowired
     private SystemAccountRepository systemAccountRepository;
 
+    @Autowired
+    private com.paycore.ledgerservice.repository.OutboxEventRepository outboxEventRepository;
+
+    @Autowired
+    private com.paycore.ledgerservice.outbox.OutboxPublisher outboxPublisher;
+
     @MockitoBean
     private KafkaTemplate<String, String> kafkaTemplate;
 
@@ -347,5 +353,69 @@ class DoubleEntryLedgerTest {
         // Process request -> should reclaim stale key and complete successfully
         CreateLedgerEntryResponse response = ledgerService.processDoubleEntry(request);
         assertEquals("COMPLETED", response.getStatus());
+    }
+
+    @Test
+    @DisplayName("Withdrawal to System Account decreases user balance and increases system account balance")
+    void processWithdrawal_ToSystemAccount_Success() {
+        UUID txId = UUID.randomUUID();
+        CreateLedgerEntryRequest request = CreateLedgerEntryRequest.builder()
+                .transactionId(txId)
+                .idempotencyKey(UUID.randomUUID().toString())
+                .debitAccountId(accountA)             // User wallet
+                .creditAccountId(systemSuspenseVndId) // System suspense counterparty
+                .amount(new BigDecimal("200000.00"))
+                .currency("VND")
+                .build();
+
+        CreateLedgerEntryResponse response = ledgerService.processDoubleEntry(request);
+
+        assertEquals("COMPLETED", response.getStatus());
+        assertEquals(new BigDecimal("800000.00"), response.getDebitBalanceAfter());
+        assertEquals(new BigDecimal("200000.00"), response.getCreditBalanceAfter());
+
+        Balance userBal = balanceRepository.findById(accountA).orElseThrow();
+        assertEquals(new BigDecimal("800000.00"), userBal.getAvailableBalance());
+    }
+
+    @Test
+    @DisplayName("Reconciliation engine accurately detects discrepancy when balance is deliberately corrupted")
+    void reconciliation_DetectsMismatch_WhenCorrupted() {
+        // Seed corrupted balance (1,000,000 in balance, but no ledger entries)
+        ReconciliationResponse recon = reconciliationService.reconcileAccount(accountA);
+        assertFalse(recon.getIsBalanced(), "Reconciliation must detect imbalance when balance exists without ledger credits");
+        assertEquals(new BigDecimal("1000000.00"), recon.getBalanceStored());
+        assertEquals(BigDecimal.ZERO, recon.getBalanceCalculated());
+    }
+
+    @Test
+    @DisplayName("Transactional Outbox writes unpublished event and OutboxPublisher dispatches to Kafka")
+    void outboxEvent_CreatedAndDispatched_Success() {
+        outboxEventRepository.deleteAll();
+
+        UUID txId = UUID.randomUUID();
+        CreateLedgerEntryRequest request = CreateLedgerEntryRequest.builder()
+                .transactionId(txId)
+                .idempotencyKey(UUID.randomUUID().toString())
+                .debitAccountId(accountA)
+                .creditAccountId(accountB)
+                .amount(new BigDecimal("50000.00"))
+                .currency("VND")
+                .build();
+
+        ledgerService.processDoubleEntry(request);
+
+        // Verify outbox entry exists with published = false
+        List<OutboxEvent> events = outboxEventRepository.findAll();
+        assertEquals(1, events.size());
+        assertFalse(events.get(0).getPublished());
+        assertEquals("LedgerEntryCreated", events.get(0).getEventType());
+
+        // Run OutboxPublisher
+        outboxPublisher.publishUnpublishedEvents();
+
+        // Verify event is marked as published
+        OutboxEvent dispatched = outboxEventRepository.findById(events.get(0).getId()).orElseThrow();
+        assertTrue(dispatched.getPublished());
     }
 }
