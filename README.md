@@ -78,8 +78,8 @@ flowchart TD
 | 🔐 **`account-service`** | `8081` | `account_db` | Authentication (RS256), KYC status, User profiles, Wallet lifecycle, Token rotation | ✅ **Completed** |
 | 🧭 **`eureka-server`** | `8761` | — | Dynamic service registration & discovery, health check monitoring | ✅ **Completed** |
 | 🚪 **`api-gateway`** | `8080` | — | Single public entry point, RS256 JWT auth, Rate limiting, TraceId routing | ✅ **Completed** |
-| 📖 **`ledger-service`** | `8082` | `ledger_db` | Double-entry bookkeeping, Balance single source of truth, Immutable journal entries | 🔄 Next |
-| 💸 **`transaction-service`** | `8083` | `transaction_db` | Fund transfers, Deposit/Withdraw flows, Saga state machine, Outbox processor | 🔄 Planned |
+| 📖 **`ledger-service`** | `8082` | `ledger_db` | Double-entry bookkeeping, Balance single source of truth, Immutable journal entries | ✅ **Completed** |
+| 💸 **`transaction-service`** | `8083` | `transaction_db` | Fund transfers, Deposit/Withdraw flows, Saga state machine, Outbox processor | 🔄 Next |
 
 ---
 
@@ -105,12 +105,48 @@ refresh_tokens (id, user_id, token_hash, expires_at, revoked, device_info, creat
 ## 🚀 5. API Reference (`account-service`)
 
 ### Public Authentication Endpoints
+```bash
+# Register a user
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"Password123!","fullName":"Alice Smith","phone":"+84901234567"}'
+
+# Login to receive RS256 JWT tokens
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"Password123!"}'
+```
+
+---
+
+## 📖 5. `ledger-service` Deep Dive
+
+### 5.1 Architecture & Double-Entry Bookkeeping
+- **Single Source of Truth**: All wallet balances across PayCore are projections computed and maintained exclusively by `ledger-service`.
+- **Immutable Journal (`ledger_entries`)**: Append-only table with no `updated_at` column. Every transfer creates exactly 1 `DEBIT` and 1 `CREDIT` record.
+- **System Suspense Accounts**: Dedicated suspense accounts (`SUSPENSE_VND`, `SUSPENSE_USD`) allow deposit and withdrawal flows from external payment gateways without violating double-entry symmetry.
+- **Deterministic Pessimistic Locking**: Concurrent transactions lock account balances in ascending order (sorted UUIDs) via `SELECT ... FOR UPDATE`, guaranteeing deadlock-free processing.
+
+### 5.2 2-Phase Idempotency Protocol
+- **Phase 0 (`REQUIRES_NEW`)**: Validates SHA-256 payload hash, acquires atomic `PROCESSING` lock, or returns cached `COMPLETED`/`FAILED` responses.
+- **Business Failure Preservation**: Insufficient balance errors (HTTP 422) are permanently stored in `idempotency_keys` in an isolated transaction so retries return identical failure snapshots without re-running logic.
+- **Stale Lock Recovery**: If a worker crashes while in `PROCESSING` state for >30 seconds, subsequent requests reclaim the lock safely.
+
+### 5.3 Internal APIs (`/internal/v1/ledger`)
+- `POST /entries`: Processes double-entry transactions (DEBIT + CREDIT).
+- `POST /entries/reversal`: Creates immutable compensating reversal entries for Saga rollbacks.
+- `GET /balance/{accountId}`: Returns current balance projection.
+- `GET /reconcile/{accountId}`: Audits balance projection by calculating total credits minus debits from raw ledger entries.
+- `GET /entries`: Returns paginated statement of ledger journal entries.
+
+---
+
+## 🚀 6. API Reference (`account-service`)
+
+### Public Authentication Endpoints
 - `POST /api/v1/auth/register` — Register user & automatically create default VND account.
 - `POST /api/v1/auth/login` — Authenticate and receive `accessToken` (15m) + `refreshToken` (7d).
 - `POST /api/v1/auth/refresh` — Perform refresh token rotation.
-- `POST /api/v1/auth/logout` — Invalidate refresh token session.
-
-### Authenticated User & Account APIs
 - `GET /api/v1/users/me` — Retrieve current profile (password hash omitted).
 - `GET /api/v1/accounts/me` — Retrieve user's wallet accounts *(balance omitted by design)*.
 - `POST /api/v1/accounts/{id}/freeze` — Freeze account *(Admin role required, publishes `AccountFrozen` event)*.

@@ -1,0 +1,17 @@
+# Local development profile
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ledger_db
+    username: paycore
+    password: paycore_secret
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
