@@ -1,0 +1,29 @@
+services:
+  transaction-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: paycore-transaction-service
+    ports:
+      - "8083:8083"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=paycore_transaction
+      - DB_USER=paycore
+      - DB_PASSWORD=paycore123
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - EUREKA_URI=http://eureka-server:8761/eureka/
+      - ACCOUNT_SERVICE_URL=http://account-service:8081
+      - LEDGER_SERVICE_URL=http://ledger-service:8082
+      - FRAUD_SERVICE_URL=http://fraud-service:8084
+    depends_on:
+      - postgres
+      - kafka
+      - eureka-server
+    networks:
+      - paycore-network
+
+networks:
+  paycore-network:
+    external: true
