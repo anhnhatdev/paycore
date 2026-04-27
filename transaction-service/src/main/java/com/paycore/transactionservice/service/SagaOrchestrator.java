@@ -46,7 +46,6 @@ public class SagaOrchestrator {
     /**
      * Executes the Saga for a transaction (Transfer / Deposit / Withdraw).
      */
-    @Transactional
     public Transaction executeSaga(Transaction transaction) {
         UUID txId = transaction.getId();
         log.info("Starting Saga execution for transaction: id={}, type={}, amount={} {}",
@@ -54,7 +53,8 @@ public class SagaOrchestrator {
 
         // Step 0: Initialize
         transaction.setStatus(TransactionStatus.PROCESSING);
-        transactionRepository.save(transaction);
+        transaction.setUpdatedAt(java.time.Instant.now());
+        transactionRepository.saveAndFlush(transaction);
         sagaLogService.recordStep(txId, SagaStepName.INIT, SagaStepStatus.SUCCESS, null, Map.of("status", "PROCESSING"), null);
 
         // Step 1: Fraud Check (Fail-closed)
@@ -65,7 +65,8 @@ public class SagaOrchestrator {
 
         // Step 3: Complete Transaction
         transaction.setStatus(TransactionStatus.COMPLETED);
-        transactionRepository.save(transaction);
+        transaction.setUpdatedAt(java.time.Instant.now());
+        transactionRepository.saveAndFlush(transaction);
 
         // Record outbox event
         recordOutboxEvent(txId, "TransactionCompleted", Map.of(
@@ -110,7 +111,7 @@ public class SagaOrchestrator {
         } catch (Exception e) {
             log.error("Fraud service invocation failed for tx {}: {}", txId, e.getMessage());
             sagaLogService.recordStep(txId, SagaStepName.FRAUD_CHECK, SagaStepStatus.FAILED, request, null, "FRAUD_SERVICE_UNAVAILABLE: " + e.getMessage());
-            failTransaction(transaction, "FRAUD_SERVICE_UNAVAILABLE");
+            failTransaction(txId, "FRAUD_SERVICE_UNAVAILABLE");
             throw new FraudServiceUnavailableException("Fraud service is unavailable; transaction rejected for security (fail-closed)");
         }
 
@@ -118,7 +119,7 @@ public class SagaOrchestrator {
             String reason = response != null && response.getReason() != null ? response.getReason() : "FRAUD_REJECTED";
             log.warn("Fraud check rejected transaction {}: reason={}", txId, reason);
             sagaLogService.recordStep(txId, SagaStepName.FRAUD_CHECK, SagaStepStatus.FAILED, request, response, reason);
-            failTransaction(transaction, reason);
+            failTransaction(txId, reason);
             throw new FraudRejectedException("Transaction rejected by fraud detection system: " + reason);
         }
 
@@ -158,7 +159,7 @@ public class SagaOrchestrator {
                 // Business failure (e.g. Insufficient Balance) -> No retry, fail immediately
                 log.warn("Ledger rejected transaction {} with HTTP 422: {}", txId, e.contentUTF8());
                 sagaLogService.recordStep(txId, SagaStepName.LEDGER_DEBIT_CREDIT, SagaStepStatus.FAILED, request, null, "INSUFFICIENT_BALANCE");
-                failTransaction(transaction, "INSUFFICIENT_BALANCE");
+                failTransaction(txId, "INSUFFICIENT_BALANCE");
                 throw new InsufficientBalanceException("Insufficient account balance to process transaction");
             } catch (Exception e) {
                 lastException = e;
@@ -175,7 +176,7 @@ public class SagaOrchestrator {
             String errorMsg = lastException != null ? lastException.getMessage() : "Ledger call failed after retries";
             log.error("Exhausted retries calling ledger service for tx {}: {}", txId, errorMsg);
             sagaLogService.recordStep(txId, SagaStepName.LEDGER_DEBIT_CREDIT, SagaStepStatus.FAILED, request, null, "LEDGER_UNAVAILABLE: " + errorMsg);
-            failTransaction(transaction, "LEDGER_UNAVAILABLE");
+            failTransaction(txId, "LEDGER_UNAVAILABLE");
             throw new LedgerServiceUnavailableException("Wallet Ledger service is unavailable after retries");
         }
 
@@ -227,19 +228,24 @@ public class SagaOrchestrator {
         }
     }
 
-    private void failTransaction(Transaction transaction, String failureReason) {
-        transaction.setStatus(TransactionStatus.FAILED);
-        transaction.setFailureReason(failureReason);
-        transactionRepository.save(transaction);
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void failTransaction(UUID transactionId, String failureReason) {
+        Transaction transaction = transactionRepository.findById(transactionId).orElse(null);
+        if (transaction != null) {
+            transaction.setStatus(TransactionStatus.FAILED);
+            transaction.setFailureReason(failureReason);
+            transaction.setUpdatedAt(java.time.Instant.now());
+            transactionRepository.saveAndFlush(transaction);
 
-        recordOutboxEvent(transaction.getId(), "TransactionFailed", Map.of(
-                "transactionId", transaction.getId(),
-                "failureReason", failureReason,
-                "status", "FAILED"
-        ));
+            recordOutboxEvent(transaction.getId(), "TransactionFailed", Map.of(
+                    "transactionId", transaction.getId(),
+                    "failureReason", failureReason,
+                    "status", "FAILED"
+            ));
 
-        TransactionResponse response = toResponse(transaction);
-        idempotencyManager.failIdempotency(transaction.getClientIdempotencyKey(), transaction.getId(), response);
+            TransactionResponse response = toResponse(transaction);
+            idempotencyManager.failIdempotency(transaction.getClientIdempotencyKey(), transaction.getId(), response);
+        }
     }
 
     private void recordOutboxEvent(UUID aggregateId, String eventType, Object payload) {

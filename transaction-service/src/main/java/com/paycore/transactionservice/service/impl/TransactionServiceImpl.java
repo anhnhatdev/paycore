@@ -43,7 +43,6 @@ public class TransactionServiceImpl implements TransactionService {
     private final IdempotencyManager idempotencyManager;
 
     @Override
-    @Transactional
     public TransactionResponse initiateTransfer(UUID userId, String idempotencyKey, TransferRequest request) {
         log.info("Initiating P2P transfer: userId={}, toAccount={}, amount={} {}",
                 userId, request.getToAccountNumber(), request.getAmount(), request.getCurrency());
@@ -92,7 +91,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .description(request.getNote())
                 .build();
 
-        transaction = transactionRepository.save(transaction);
+        transaction = transactionRepository.saveAndFlush(transaction);
 
         // 5. Execute Saga
         Transaction completed = sagaOrchestrator.executeSaga(transaction);
@@ -100,7 +99,6 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
-    @Transactional
     public TransactionResponse initiateDeposit(UUID userId, String idempotencyKey, DepositRequest request) {
         log.info("Initiating Deposit: userId={}, amount={} {}", userId, request.getAmount(), request.getCurrency());
 
@@ -124,13 +122,12 @@ public class TransactionServiceImpl implements TransactionService {
                 .description(request.getNote() != null ? request.getNote() : "Top-up via external gateway")
                 .build();
 
-        transaction = transactionRepository.save(transaction);
+        transaction = transactionRepository.saveAndFlush(transaction);
         Transaction completed = sagaOrchestrator.executeSaga(transaction);
         return mapToResponseWithLogs(completed);
     }
 
     @Override
-    @Transactional
     public TransactionResponse initiateWithdraw(UUID userId, String idempotencyKey, WithdrawRequest request) {
         log.info("Initiating Withdrawal: userId={}, amount={} {}", userId, request.getAmount(), request.getCurrency());
 
@@ -154,7 +151,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .description(request.getNote() != null ? request.getNote() : "Withdrawal to " + request.getBankCode() + " " + request.getBankAccountNumber())
                 .build();
 
-        transaction = transactionRepository.save(transaction);
+        transaction = transactionRepository.saveAndFlush(transaction);
         Transaction completed = sagaOrchestrator.executeSaga(transaction);
         return mapToResponseWithLogs(completed);
     }
