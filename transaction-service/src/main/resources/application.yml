@@ -1,0 +1,87 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: transaction-service
+  profiles:
+    active: local
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:paycore_transaction}
+    username: ${DB_USER:paycore}
+    password: ${DB_PASSWORD:paycore123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: transaction-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URI:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+
+transaction:
+  saga:
+    fraud-check-timeout-ms: 2000
+    ledger-timeout-ms: 3000
+    max-ledger-retries: 3
+    stuck-reaper-threshold-seconds: 120
+    stuck-reaper-cron: "0 * * * * *"
+  outbox:
+    poll-interval-ms: 1000
+  kafka:
+    topics:
+      transaction-events: paycore.transaction-events
+      saga-tasks: paycore.transaction.saga.start
+  services:
+    account-service-url: ${ACCOUNT_SERVICE_URL:http://account-service}
+    ledger-service-url: ${LEDGER_SERVICE_URL:http://ledger-service}
+    fraud-service-url: ${FRAUD_SERVICE_URL:http://fraud-service}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

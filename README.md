@@ -79,7 +79,9 @@ flowchart TD
 | 🧭 **`eureka-server`** | `8761` | — | Dynamic service registration & discovery, health check monitoring | ✅ **Completed** |
 | 🚪 **`api-gateway`** | `8080` | — | Single public entry point, RS256 JWT auth, Rate limiting, TraceId routing | ✅ **Completed** |
 | 📖 **`ledger-service`** | `8082` | `ledger_db` | Double-entry bookkeeping, Balance single source of truth, Immutable journal entries | ✅ **Completed** |
-| 💸 **`transaction-service`** | `8083` | `transaction_db` | Fund transfers, Deposit/Withdraw flows, Saga state machine, Outbox processor | 🔄 Next |
+| 💸 **`transaction-service`** | `8083` | `transaction_db` | Fund transfers, Deposit/Withdraw flows, Saga Orchestrator, Stuck Reaper, Outbox | ✅ **Completed** |
+| 🛡️ **`fraud-service`** | `8084` | `fraud_db` | Real-time risk evaluation, rule engine, rate anomaly detection | 🔄 Next |
+| 🔔 **`notification-service`** | `8085` | `notification_db` | Transaction alert notifications, email dispatch, push delivery | 🔄 Planned |
 
 ---
 
@@ -102,23 +104,6 @@ refresh_tokens (id, user_id, token_hash, expires_at, revoked, device_info, creat
 
 ---
 
-## 🚀 5. API Reference (`account-service`)
-
-### Public Authentication Endpoints
-```bash
-# Register a user
-curl -X POST http://localhost:8080/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","password":"Password123!","fullName":"Alice Smith","phone":"+84901234567"}'
-
-# Login to receive RS256 JWT tokens
-curl -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","password":"Password123!"}'
-```
-
----
-
 ## 📖 5. `ledger-service` Deep Dive
 
 ### 5.1 Architecture & Double-Entry Bookkeeping
@@ -132,12 +117,32 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 - **Business Failure Preservation**: Insufficient balance errors (HTTP 422) are permanently stored in `idempotency_keys` in an isolated transaction so retries return identical failure snapshots without re-running logic.
 - **Stale Lock Recovery**: If a worker crashes while in `PROCESSING` state for >30 seconds, subsequent requests reclaim the lock safely.
 
-### 5.3 Internal APIs (`/internal/v1/ledger`)
-- `POST /entries`: Processes double-entry transactions (DEBIT + CREDIT).
-- `POST /entries/reversal`: Creates immutable compensating reversal entries for Saga rollbacks.
-- `GET /balance/{accountId}`: Returns current balance projection.
-- `GET /reconcile/{accountId}`: Audits balance projection by calculating total credits minus debits from raw ledger entries.
-- `GET /entries`: Returns paginated statement of ledger journal entries.
+---
+
+## 💸 6. `transaction-service` Deep Dive
+
+### 6.1 Saga Orchestration & State Transitions
+- **State Machine Transitions**:
+  $$\text{PENDING} \longrightarrow \text{PROCESSING} \longrightarrow \begin{cases} \text{COMPLETED} & \text{(Fraud \& Ledger Success)} \\ \text{FAILED} & \text{(Fraud Reject or Insufficient Balance)} \\ \text{COMPENSATING} \longrightarrow \text{COMPENSATED} & \text{(External Gateway Failure on Withdraw)} \end{cases}$$
+- **Fail-Closed Security**: Fraud service outages result in transaction rejection (`FRAUD_SERVICE_UNAVAILABLE`) rather than allowing potential fraud.
+- **Audit Step Logging (`saga_logs`)**: Every individual saga transition (`INIT`, `FRAUD_CHECK`, `LEDGER_DEBIT_CREDIT`, `LEDGER_REVERSAL`, `NOTIFY`) is recorded with payload snapshots.
+
+### 6.2 Deterministic Idempotency Key Derivation
+- **Client-Facing Idempotency**: Managed via `Idempotency-Key` HTTP header with SHA-256 hash validation and 24-hour TTL snapshot caching.
+- **Ledger Downstream Key**: Deterministic key formatting prevents double-execution on network retries or crashes:
+  - Double-entry step: `{transactionId}:DEBIT_CREDIT`
+  - Compensating reversal step: `{transactionId}:REVERSAL`
+
+### 6.3 Stuck Transaction Reaper & Outbox Dispatcher
+- **Stuck Reaper Daemon**: Periodically detects transactions stalled in `PENDING`/`PROCESSING`/`COMPENSATING` older than 2 minutes and safely resumes execution.
+- **Transactional Outbox**: Emits `TransactionCompleted`, `TransactionFailed`, and `TransactionCompensated` events to Kafka topic `paycore.transaction-events`.
+
+### 6.4 Public REST APIs (`/api/v1/transactions`)
+- `POST /transfer` — Initiate P2P wallet transfer.
+- `POST /deposit` — Top-up wallet from external payment gateway via system suspense account.
+- `POST /withdraw` — Cash out wallet to external bank account with automatic compensation on gateway failure.
+- `GET /{id}` — Retrieve complete transaction record with Saga audit trace.
+- `GET /` — Paginated transaction history for the authenticated user.
 
 ---
 

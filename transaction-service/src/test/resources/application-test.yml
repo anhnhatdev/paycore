@@ -1,0 +1,37 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:transaction_test_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  flyway:
+    enabled: false
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+transaction:
+  saga:
+    fraud-check-timeout-ms: 2000
+    ledger-timeout-ms: 3000
+    max-ledger-retries: 3
+    stuck-reaper-threshold-seconds: 120
+    stuck-reaper-cron: "0 0 0 1 1 ?"
+  outbox:
+    poll-interval-ms: 600000
+
+logging:
+  level:
+    com.paycore.transactionservice: DEBUG
