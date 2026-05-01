@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  payment-db:
+    image: postgres:16-alpine
+    container_name: paycore-payment-db
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5435:5432"
+    volumes:
+      - payment_db_data:/var/lib/postgresql/data
+
+volumes:
+  payment_db_data:

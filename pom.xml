@@ -18,6 +18,7 @@
         <module>api-gateway</module>
         <module>ledger-service</module>
         <module>transaction-service</module>
+        <module>payment-gateway-service</module>
     </modules>
 
     <properties>

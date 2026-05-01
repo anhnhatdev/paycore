@@ -1,0 +1,10 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+logging:
+  level:
+    com.paycore.paymentgatewayservice: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
