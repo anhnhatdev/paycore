@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: payment-gateway-service
+  datasource:
+    url: jdbc:h2:mem:payment_test_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+  kafka:
+    bootstrap-servers: localhost:9092
+
+eureka:
+  client:
+    enabled: false
+
+payment:
+  gateway:
+    reconcile:
+      stuck-threshold-seconds: 120
+    outbox:
+      batch-size: 50
+      topic: paycore.gateway-events
+    vnpay:
+      tmn-code: PAYCORE01
+      hash-secret: TESTSECRETKEYVNPAY2026
+      url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+      return-url: http://localhost:8080/webhooks/vnpay/callback
+      version: "2.1.0"
+      command: "pay"
+    momo:
+      partner-code: MOMO_PAYCORE
+      access-key: MOMO_ACCESS_KEY
+      secret-key: MOMO_SECRET_KEY
+      endpoint: https://test-payment.momo.vn/v2/gateway/api/create
+      return-url: http://localhost:8080/webhooks/momo/callback
+      notify-url: http://localhost:8080/webhooks/momo
+    stripe:
+      api-key: sk_test_mock_stripe_key
+      webhook-secret: whsec_test_stripe_secret

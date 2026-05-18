@@ -80,8 +80,9 @@ flowchart TD
 | 🚪 **`api-gateway`** | `8080` | — | Single public entry point, RS256 JWT auth, Rate limiting, TraceId routing | ✅ **Completed** |
 | 📖 **`ledger-service`** | `8082` | `ledger_db` | Double-entry bookkeeping, Balance single source of truth, Immutable journal entries | ✅ **Completed** |
 | 💸 **`transaction-service`** | `8083` | `transaction_db` | Fund transfers, Deposit/Withdraw flows, Saga Orchestrator, Stuck Reaper, Outbox | ✅ **Completed** |
-| 🛡️ **`fraud-service`** | `8084` | `fraud_db` | Real-time risk evaluation, rule engine, rate anomaly detection | 🔄 Next |
-| 🔔 **`notification-service`** | `8085` | `notification_db` | Transaction alert notifications, email dispatch, push delivery | 🔄 Planned |
+| 💳 **`payment-gateway-service`** | `8084` | `payment_db` | VNPay/MoMo/Stripe Adapters, Public Webhooks, Reconciliation Daemon, Outbox | ✅ **Completed** |
+| 🛡️ **`fraud-service`** | `8085` | `fraud_db` | Real-time risk evaluation, rule engine, rate anomaly detection | 🔄 Next |
+| 🔔 **`notification-service`** | `8086` | `notification_db` | Transaction alert notifications, email dispatch, push delivery | 🔄 Planned |
 
 ---
 
@@ -143,6 +144,30 @@ refresh_tokens (id, user_id, token_hash, expires_at, revoked, device_info, creat
 - `POST /withdraw` — Cash out wallet to external bank account with automatic compensation on gateway failure.
 - `GET /{id}` — Retrieve complete transaction record with Saga audit trace.
 - `GET /` — Paginated transaction history for the authenticated user.
+
+---
+
+## 💳 7. `payment-gateway-service` Deep Dive
+
+### 7.1 Provider Adapter Pattern & Supported Gateways
+- **Adapter Architecture**: Isolated `PaymentProviderAdapter` implementations for **VNPay** (HMAC-SHA512 `vnp_SecureHash`), **MoMo** (HMAC-SHA256 signature), and **Stripe** (`Stripe-Signature` timestamped HMAC).
+- **Public Webhook Handling (`/webhooks/{provider}`)**:
+  - Reads raw request bytes before JSON parsing.
+  - Verifies cryptographic signature before doing any database mutations.
+  - Returns HTTP 200 OK in all cases (including invalid signature or unknown transaction) to prevent gateway retry floods.
+- **Unique Deduplication Layer**: Partial unique index `idx_webhook_dedup` on `(provider, provider_event_id)` stops duplicate webhook executions at the database level.
+- **PCI-DSS Sensitive Data Masking**: `SensitiveDataMasker` masks card PANs (`4111********4444`) and CVV (`***`) before storing raw payloads into `webhook_events`.
+
+### 7.2 Automated Reconciliation Engine
+- **Background Daemon**: Periodically queries provider status APIs for transactions stalled in `PENDING_PROVIDER` (> 5 mins) to recover missed webhooks.
+- **Expiration Worker**: Automatically marks transactions past `expires_at` (15 mins) as `EXPIRED` and dispatches `GatewayPaymentExpired` event.
+
+### 7.3 Gateway APIs Reference
+- `POST /internal/v1/gateway/deposit/initiate` — Initiates deposit and returns provider checkout URL.
+- `POST /internal/v1/gateway/withdraw/initiate` — Dispatches payout order to banking provider.
+- `POST /webhooks/{provider}` — Ingests external webhook notifications.
+- `GET /webhooks/{provider}/callback` — Ingests user browser redirect callbacks.
+- `GET /internal/v1/gateway/transactions/{id}/status` — Queries gateway transaction status.
 
 ---
 
