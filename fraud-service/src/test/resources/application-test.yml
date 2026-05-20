@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: fraud-service
+  datasource:
+    url: jdbc:h2:mem:fraud_test_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: false
+  flyway:
+    enabled: false
+  kafka:
+    bootstrap-servers: localhost:9092
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+fraud:
+  latency:
+    budget-ms: 1200
+  cache:
+    dedup-ttl-seconds: 300
+    blacklist-prefix: "blacklist"
+    velocity-prefix: "velocity"
+    dedup-prefix: "dedup"
+  kafka:
+    rule-updated-topic: "fraud.rules.updated"
+    review-decision-topic: "fraud.review-decisions"
