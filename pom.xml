@@ -19,6 +19,7 @@
         <module>ledger-service</module>
         <module>transaction-service</module>
         <module>payment-gateway-service</module>
+        <module>fraud-service</module>
     </modules>
 
     <properties>

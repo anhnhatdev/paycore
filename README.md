@@ -81,7 +81,7 @@ flowchart TD
 | 📖 **`ledger-service`** | `8082` | `ledger_db` | Double-entry bookkeeping, Balance single source of truth, Immutable journal entries | ✅ **Completed** |
 | 💸 **`transaction-service`** | `8083` | `transaction_db` | Fund transfers, Deposit/Withdraw flows, Saga Orchestrator, Stuck Reaper, Outbox | ✅ **Completed** |
 | 💳 **`payment-gateway-service`** | `8084` | `payment_db` | VNPay/MoMo/Stripe Adapters, Public Webhooks, Reconciliation Daemon, Outbox | ✅ **Completed** |
-| 🛡️ **`fraud-service`** | `8085` | `fraud_db` | Real-time risk evaluation, rule engine, rate anomaly detection | 🔄 Next |
+| 🛡️ **`fraud-service`** | `8085` | `fraud_db` | Real-time risk evaluation, rule engine, Redis velocity, blacklist fail-fast, review queue | ✅ **Completed** |
 | 🔔 **`notification-service`** | `8086` | `notification_db` | Transaction alert notifications, email dispatch, push delivery | 🔄 Planned |
 
 ---
@@ -168,6 +168,27 @@ refresh_tokens (id, user_id, token_hash, expires_at, revoked, device_info, creat
 - `POST /webhooks/{provider}` — Ingests external webhook notifications.
 - `GET /webhooks/{provider}/callback` — Ingests user browser redirect callbacks.
 - `GET /internal/v1/gateway/transactions/{id}/status` — Queries gateway transaction status.
+
+---
+
+## 🛡️ 8. `fraud-service` Deep Dive
+
+### 8.1 Latency Budget & Real-Time Hot Path
+- **Latency Budget Control**: Operates under strict caller deadline (< 2s) with an internal safety threshold of **1200ms**. If an internal step times out or encounters failure, gracefully falls back to `REVIEW` with reason code `INTERNAL_TIMEOUT_PARTIAL_CHECK`.
+- **Redis-Accelerated Hot Path**:
+  - **Deduplication (`dedup:{transactionId}`)**: 5-minute TTL; returns cached decision from `fraud_check_logs` without re-incrementing velocity counters on caller retries.
+  - **Fail-Fast Blacklists**: O(1) Redis Sets for `blacklist:account`, `blacklist:device`, `blacklist:ip` (< 50ms fast reject).
+  - **Sliding Velocity Counters**: Atomic Redis `INCR` with automated TTLs across `1min`, `1hour`, and `1day` sliding windows.
+- **Dynamic In-Memory Rule Engine**: Configurable thresholds (`MAX_AMOUNT_PER_TX`, `VELOCITY_PER_MINUTE`, `LARGE_AMOUNT_REVIEW`) partitioned by KYC status (`PENDING` vs `VERIFIED`), synchronized dynamically via DB polling and Kafka topic `fraud.rules.updated`.
+
+### 8.2 Manual Review Queue & Audit Logging
+- **`fraud_check_logs`**: Comprehensive audit log recording decision, latency, evaluated rule snapshots, and admin resolution for regulatory compliance.
+- **Review Queue APIs**:
+  - `POST /internal/v1/fraud/check` — Synchronous risk evaluation API called by `transaction-service`.
+  - `GET /internal/v1/fraud/review-queue` — Retrieves pending manual review transactions.
+  - `POST /internal/v1/fraud/review-queue/{checkId}/decide` — Admin manual `APPROVE` or `REJECT` decision.
+  - `POST /internal/v1/fraud/blacklist` — Blacklist entry management (instantly syncs DB & Redis Set).
+  - `PUT /internal/v1/fraud/rules/{ruleCode}` — Dynamic rule threshold adjustments.
 
 ---
 

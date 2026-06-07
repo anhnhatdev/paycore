@@ -1,0 +1,10 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fraud_db
+    username: postgres
+    password: postgres
+  jpa:
+    show-sql: true
