@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: notification-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
   datasource:
     url: jdbc:h2:mem:notification_test_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
     username: sa
@@ -18,12 +21,6 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
   flyway:
     enabled: false
-  kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: test-notification-group
-      auto-offset-reset: earliest
-      enable-auto-commit: false
 
 eureka:
   client:
@@ -31,12 +28,16 @@ eureka:
     register-with-eureka: false
     fetch-registry: false
 
+feign:
+  circuitbreaker:
+    enabled: false
+
 notification:
   dead-letter-topic: paycore.notification.dead-letter
   account-service-url: http://localhost:8081
   retry:
     max-attempts: 3
-    initial-backoff-ms: 100
-    multiplier: 1.0
+    interval-ms: 9999999
   pending-recovery:
     stuck-threshold-minutes: 5
+    interval-ms: 9999999

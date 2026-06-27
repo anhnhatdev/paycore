@@ -22,6 +22,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@org.springframework.context.annotation.Profile("!test")
 public class PaycoreEventConsumer {
 
     private final NotificationService notificationService;

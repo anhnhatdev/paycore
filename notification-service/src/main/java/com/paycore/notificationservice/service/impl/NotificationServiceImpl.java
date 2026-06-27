@@ -190,7 +190,7 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = Exception.class)
     public void dispatchNotification(NotificationLog logEntry, String plainRecipient) {
         if (logEntry == null) return;
 
