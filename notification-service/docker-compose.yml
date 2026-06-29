@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  notification-postgres:
+    image: postgres:16-alpine
+    container_name: paycore-notification-postgres
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: paycore_user
+      POSTGRES_PASSWORD: paycore_secure_password_2026
+    ports:
+      - "5438:5432"
+    volumes:
+      - notification_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paycore_user -d notification_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  notification_pgdata:

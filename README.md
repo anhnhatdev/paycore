@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Apache%20Kafka-3.8-231F20?style=for-the-badge&logo=apachekafka&logoColor=white" alt="Kafka" />
   <img src="https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white" alt="Flyway" />
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
-  <img src="https://img.shields.io/badge/Tests-22%2F22%20Passing-brightgreen?style=for-the-badge&logo=junit5&logoColor=white" alt="Tests" />
+  <img src="https://img.shields.io/badge/Tests-119%2F119%20Passing-brightgreen?style=for-the-badge&logo=junit5&logoColor=white" alt="Tests" />
 </p>
 
 ---
@@ -260,7 +260,80 @@ Access Swagger UI documentation at: **`http://localhost:8081/swagger-ui.html`**
 
 ---
 
-## 📜 8. License & Author
+## 🔔 9. Notification Service — Architecture & Idempotency Protocol
+
+### Role
+`notification-service` is a **pure Kafka consumer** — it never exposes public-facing REST endpoints, never holds financial data, and never calls `wallet-ledger-service` directly. Its sole job: receive domain events published by other services via Outbox Pattern, and deliver user notifications reliably and exactly once.
+
+### Kafka Topics Consumed
+| Topic | Published By | Events |
+|-------|-------------|--------|
+| `paycore.transaction-events` | `transaction-service` | `TransactionCompleted`, `TransactionFailed`, `TransactionCompensated` |
+| `paycore.gateway-events` | `payment-gateway-service` | `GatewayPaymentSuccess`, `GatewayPaymentFailed`, `GatewayPaymentExpired` |
+| `paycore.account-events` | `account-service` | `AccountFrozen` |
+
+### 8-Step Idempotent Processing Protocol
+Every incoming Kafka message is processed through a strict 8-step pipeline to guarantee **at-most-once delivery** despite Kafka's at-least-once semantics:
+
+```
+STEP 1: Receive message (eventId, eventType, payload) from Kafka
+STEP 2: SELECT 1 FROM processed_events WHERE event_id = ?
+        → If found: COMMIT OFFSET, RETURN (dedup hit)
+STEP 3: @Transactional — INSERT processed_events + INSERT notifications (status=PENDING)
+        → Both inserts ATOMIC; DB unique PK on event_id catches concurrent duplication
+STEP 4: Check notification_preferences (user opted-out?)
+        → If opted-out AND NOT non-optional security event: UPDATE status=SKIPPED_BY_PREFERENCE, RETURN
+STEP 5: Resolve real contact (email/phone) from account-service /internal/v1/users/{id}/contact
+STEP 6: Render template for (eventType × channel) → subject + body
+STEP 7: Dispatch to NotificationProvider (Email / SMS / Push)
+STEP 8: UPDATE notifications SET status=SENT|FAILED, attempt_count++, sent_at=NOW()
+        COMMIT Kafka offset
+```
+
+### Non-Optional Security Events (Cannot Be Disabled by User)
+The following event types ALWAYS trigger notification regardless of user preference settings. Attempting to disable them via `PUT /api/v1/notifications/preferences` returns `400 Bad Request`:
+
+| Event Type | Reason |
+|-----------|--------|
+| `AccountFrozen` | Regulatory requirement — user must be informed of account restriction |
+| `TransactionCompensated` | Financial impact — user money was returned; silence would cause confusion |
+| `FraudReviewApproved` | Security decision finalized |
+| `FraudReviewRejected` | Security decision finalized |
+
+### PII Privacy & Masking
+- **Real contact data** (email/phone) is resolved on-the-fly per request from `account-service`
+- **Only masked values** are stored in `notifications.recipient_masked` and written to logs
+  - Email: `john.doe@example.com` → `j******e@example.com`
+  - Phone: `0901234567` → `090***4567`
+- Raw PII is never written to the database or log files
+
+### Retry & Dead-Letter Queue
+- **First attempt** at dispatch time (Step 7)
+- **Failed deliveries** → `status=FAILED`, retried by `NotificationRetryDaemon` with configurable interval
+- **Max attempts exceeded** → `status=DEAD_LETTER`, event published to `paycore.notification.dead-letter`
+- **Stuck PENDING recovery**: `StuckPendingRecoveryDaemon` scans for `status=PENDING` records older than 5 minutes (worker crash recovery) using `FOR UPDATE SKIP LOCKED`
+
+### REST API Endpoints
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/notifications/preferences` | Get all notification preferences for authenticated user |
+| `PUT` | `/api/v1/notifications/preferences` | Update opt-in/opt-out per event type + channel (400 for non-optional) |
+| `GET` | `/internal/v1/notifications/history/{userId}` | Audit delivery history (masked recipients only) |
+
+### Test Coverage: 15/15 ✅
+| Test | Scenario |
+|------|---------|
+| TEST-1 | Duplicate Kafka events → delivered exactly once (idempotency) |
+| TEST-2 | User opt-out → `SKIPPED_BY_PREFERENCE` status |
+| TEST-3 | `AccountFrozen` bypasses opt-out (non-optional security alert) |
+| TEST-4 | Provider failure → `FAILED` status with error details |
+| TEST-5 | Max retries exceeded → `DEAD_LETTER` transition |
+| TEST-6 | Stuck PENDING recovery daemon query correctness |
+| TEST-7 | Real email never stored in DB — only masked recipient persisted |
+
+---
+
+## 📜 10. License & Author
 
 - **Author:** [anhnhatdev](https://github.com/anhnhatdev)
 - **Project:** PayCore Fintech Microservices Platform
