@@ -1,0 +1,41 @@
+server:
+  port: 0
+
+spring:
+  application:
+    name: reconciliation-service
+  datasource:
+    url: jdbc:h2:mem:reconciliation_test_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+    hikari:
+      pool-name: ReconciliationTestHikariPool
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    database-platform: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+feign:
+  circuitbreaker:
+    enabled: false
+
+paycore:
+  clients:
+    ledger-service-url: http://localhost:8082
+    transaction-service-url: http://localhost:8083
+    payment-gateway-service-url: http://localhost:8084
+  scheduler:
+    per-account-cron: "-"
+    global-invariant-cron: "-"
+    cross-service-cron: "-"
+    external-gateway-cron: "-"

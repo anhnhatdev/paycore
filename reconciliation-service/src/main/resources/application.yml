@@ -1,0 +1,64 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: reconciliation-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5439/reconciliation_db}
+    username: ${SPRING_DATASOURCE_USERNAME:paycore_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:paycore_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1800000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+paycore:
+  clients:
+    ledger-service-url: ${LEDGER_SERVICE_URL:http://localhost:8082}
+    transaction-service-url: ${TRANSACTION_SERVICE_URL:http://localhost:8083}
+    payment-gateway-service-url: ${PAYMENT_GATEWAY_SERVICE_URL:http://localhost:8084}
+  scheduler:
+    per-account-cron: ${PER_ACCOUNT_CRON:0 0 * * * *}
+    global-invariant-cron: ${GLOBAL_INVARIANT_CRON:0 0 */6 * * *}
+    cross-service-cron: ${CROSS_SERVICE_CRON:0 30 */2 * * *}
+    external-gateway-cron: ${EXTERNAL_GATEWAY_CRON:0 0 2 * * *}

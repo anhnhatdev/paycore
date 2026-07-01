@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  reconciliation-db:
+    image: postgres:16-alpine
+    container_name: paycore-reconciliation-db
+    environment:
+      POSTGRES_DB: reconciliation_db
+      POSTGRES_USER: paycore_user
+      POSTGRES_PASSWORD: paycore_password
+    ports:
+      - "5439:5432"
+    volumes:
+      - reconciliation_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paycore_user -d reconciliation_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  reconciliation_pgdata:
