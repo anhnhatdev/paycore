@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Apache%20Kafka-3.8-231F20?style=for-the-badge&logo=apachekafka&logoColor=white" alt="Kafka" />
   <img src="https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white" alt="Flyway" />
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
-  <img src="https://img.shields.io/badge/Tests-119%2F119%20Passing-brightgreen?style=for-the-badge&logo=junit5&logoColor=white" alt="Tests" />
+  <img src="https://img.shields.io/badge/Tests-129%2F129%20Passing-brightgreen?style=for-the-badge&logo=junit5&logoColor=white" alt="Tests" />
 </p>
 
 ---
@@ -333,7 +333,53 @@ The following event types ALWAYS trigger notification regardless of user prefere
 
 ---
 
-## 📜 10. License & Author
+## ⚖️ 10. Reconciliation Service — Financial Integrity & Discrepancy Auditing
+
+### Core Philosophy: Detect & Warn, NEVER Auto-Repair Money
+`reconciliation-service` operates as an independent batch and auditing engine. Its purpose is to uncover financial and synchronization discrepancies across all microservices and external payment providers. Under zero circumstances is this service permitted to call write/update endpoints on `wallet-ledger-service` or alter account balances — all discrepancies require human investigation and audit logging.
+
+### 4 Reconciliation Types
+| Run Type | Frequency | Detection Target | Severity |
+|---|---|---|---|
+| `INTERNAL_PER_ACCOUNT` | Hourly | Checks stored account balance against double-entry ledger entries | `MEDIUM` |
+| `INTERNAL_GLOBAL_INVARIANT` | Every 6h | Invariant verification: $\sum \text{DEBIT} == \sum \text{CREDIT}$ | `CRITICAL` |
+| `CROSS_SERVICE` | Every 2h | Transaction Service COMPLETED $\leftrightarrow$ Ledger entries matching | `HIGH` |
+| `EXTERNAL_GATEWAY` | Daily (T-1) | Succeeded gateway transactions $\leftrightarrow$ Provider settlement report (CSV) | `HIGH` / `CRITICAL` |
+
+### Discrepancy Severity & Escalation Matrix
+| Severity | Description | Alerting Action |
+|---|---|---|
+| `LOW` | Minor timing discrepancy | Internal structured log & dashboard |
+| `MEDIUM` | Single account `BALANCE_MISMATCH` | Warning log, queued for ops shift review |
+| `HIGH` | `MISSING_LEDGER_ENTRY`, `ORPHAN_LEDGER_ENTRY`, `GATEWAY_MISSING_INTERNAL_RECORD` | Immediate error alert (Ops team notification) |
+| `CRITICAL` | `GLOBAL_INVARIANT_VIOLATION`, `GATEWAY_AMOUNT_MISMATCH` | Multi-channel broadcast, urgent on-call page |
+
+### Discrepancy Deduplication & Idempotency
+Executing the same reconciliation job twice over the same period updates the existing `OPEN` discrepancy record's `reconciliation_run_id` rather than inserting redundant rows.
+
+### REST API Endpoints
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/internal/v1/reconciliation/runs` | List reconciliation execution history |
+| `POST` | `/internal/v1/reconciliation/trigger` | Trigger immediate on-demand reconciliation run |
+| `GET` | `/internal/v1/reconciliation/discrepancies` | Query detected discrepancies by status, severity, or runId |
+| `POST` | `/internal/v1/reconciliation/discrepancies/{id}/resolve` | Resolve discrepancy with operator ID & resolution note (Audit only) |
+| `POST` | `/internal/v1/reconciliation/settlement/upload` | Upload and parse provider settlement CSV file |
+
+### Test Coverage: 10/10 ✅
+| Test | Scenario |
+|---|---|
+| TEST-1 | `INTERNAL_PER_ACCOUNT` detects balance mismatch |
+| TEST-2 | `INTERNAL_GLOBAL_INVARIANT` passes with 0 discrepancies on balanced ledger |
+| TEST-3 | `INTERNAL_GLOBAL_INVARIANT` flags 1 VND imbalance as `CRITICAL` |
+| TEST-4 | `CROSS_SERVICE` identifies missing and orphan ledger entries |
+| TEST-5 | `EXTERNAL_GATEWAY` identifies missing records and amount mismatches |
+| TEST-6 | Idempotency / Dedup — repeated run updates existing `OPEN` discrepancy |
+| TEST-7 | Resolution updates audit fields + Architectural Assertion (zero write calls to Ledger) |
+
+---
+
+## 📜 11. License & Author
 
 - **Author:** [anhnhatdev](https://github.com/anhnhatdev)
 - **Project:** PayCore Fintech Microservices Platform
