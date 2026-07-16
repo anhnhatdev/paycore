@@ -22,6 +22,7 @@
         <module>fraud-service</module>
         <module>notification-service</module>
         <module>reconciliation-service</module>
+        <module>audit-service</module>
     </modules>
 
     <properties>
