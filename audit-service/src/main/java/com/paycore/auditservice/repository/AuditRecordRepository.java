@@ -30,5 +30,5 @@ public interface AuditRecordRepository extends JpaRepository<AuditRecord, UUID>,
     Page<AuditRecord> findAllByOrderByRecordedAtDesc(Pageable pageable);
 
     @Query("SELECT a FROM AuditRecord a WHERE a.recordedAt < :beforeDate ORDER BY a.sequenceNumber ASC")
-    List<AuditRecord> findRecordsOlderThan(Instant beforeDate, Pageable pageable);
+    List<AuditRecord> findRecordsOlderThan(@org.springframework.data.repository.query.Param("beforeDate") Instant beforeDate, Pageable pageable);
 }

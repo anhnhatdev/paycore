@@ -73,7 +73,8 @@ public class AuditRecordServiceImpl implements AuditRecordService {
         Long nextSequence = latestRecordOpt.map(r -> r.getSequenceNumber() + 1).orElse(1L);
         String prevHash = latestRecordOpt.map(AuditRecord::getRecordHash).orElse(AuditHasher.GENESIS_HASH);
 
-        Instant occurredAt = event.getOccurredAt() != null ? event.getOccurredAt() : Instant.now();
+        Instant occurredAt = (event.getOccurredAt() != null ? event.getOccurredAt() : Instant.now())
+                .truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
 
         // 5. Calculate SHA-256 chained hash
         String recordHash = auditHasher.calculateRecordHash(

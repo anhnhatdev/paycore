@@ -31,7 +31,7 @@ public class AuditHasher {
         String rawData = effectivePrevHash +
                 "|" + (eventId != null ? eventId.toString() : "") +
                 "|" + (payload != null ? payload : "{}") +
-                "|" + (occurredAt != null ? occurredAt.toString() : "") +
+                "|" + (occurredAt != null ? occurredAt.toEpochMilli() : 0L) +
                 "|" + (sequenceNumber != null ? sequenceNumber.toString() : "0");
 
         return sha256(rawData);
