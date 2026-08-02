@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  audit-db:
+    image: postgres:16-alpine
+    container_name: paycore-audit-db
+    environment:
+      POSTGRES_DB: audit_db
+      POSTGRES_USER: paycore_user
+      POSTGRES_PASSWORD: paycore_password
+    ports:
+      - "5440:5432"
+    volumes:
+      - audit_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paycore_user -d audit_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  audit_pgdata:
