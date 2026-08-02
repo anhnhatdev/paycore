@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Apache%20Kafka-3.8-231F20?style=for-the-badge&logo=apachekafka&logoColor=white" alt="Kafka" />
   <img src="https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white" alt="Flyway" />
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
-  <img src="https://img.shields.io/badge/Tests-129%2F129%20Passing-brightgreen?style=for-the-badge&logo=junit5&logoColor=white" alt="Tests" />
+  <img src="https://img.shields.io/badge/Tests-141%2F141%20Passing-brightgreen?style=for-the-badge&logo=junit5&logoColor=white" alt="Tests" />
 </p>
 
 ---
@@ -379,7 +379,54 @@ Executing the same reconciliation job twice over the same period updates the exi
 
 ---
 
-## 📜 11. License & Author
+## 🔒 11. Audit & Compliance Service — Tamper-Evident Immutable Event Ledger
+
+### Role & Guarantees
+`audit-service` provides an append-only, tamper-evident record of all security, financial, and operational events occurring across the PayCore platform. **No endpoint in this service is permitted to update or delete any audit record.**
+
+### Cryptographic Hash Chaining (Blockchain-Style Tamper Evidence)
+Every audit record computes a SHA-256 hash chaining to the preceding record:
+$$\text{record\_hash} = \text{SHA256}(\text{prev\_hash} \parallel \text{event\_id} \parallel \text{payload} \parallel \text{occurred\_at} \parallel \text{sequence\_number})$$
+- **Tamper Detection**: If any row or payload in the database is modified directly, recalculating the chain via `GET /internal/v1/audit/verify-chain` detects the exact corrupted sequence number.
+- **Genesis Block**: Sequence #1 links to a 64-character zero genesis hash.
+- **External Checkpoints**: Daily cryptographic checkpoints are generated and published externally for non-repudiation.
+
+### Recursive Sensitive Payload Redaction
+Before hashing and persistence, all event payloads undergo automated recursive traversal to redact sensitive fields into `"[REDACTED]"`:
+- PAN / Card numbers (`cardNumber`, `pan`)
+- CVV / CVC security codes (`cvv`, `cvv2`, `cvc`)
+- Passwords & hashes (`password`, `passwordHash`, `pin`)
+- One-time passwords (`otp`, `otpCode`)
+- Cryptographic keys (`secretKey`, `privateKey`, `apiKey`)
+
+### Mandatory Meta-Audit Access Logging
+Every call to `GET /internal/v1/audit/records` automatically logs the operator's ID, search filters, and returned count into `audit_access_logs` for compliance oversight.
+
+### RBAC Protection
+Audit logs require explicit `COMPLIANCE` or `ADMIN` roles in gateway headers (`X-User-Role`). Unauthorized requests are rejected with `403 Forbidden`.
+
+### REST API Endpoints
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/internal/v1/audit/records` | Query audit trail with automatic meta-audit logging (Admin/Compliance only) |
+| `GET` | `/internal/v1/audit/verify-chain` | Re-computes cryptographic hash chain to verify unbroken integrity |
+| `GET` | `/internal/v1/audit/access-logs` | Review meta-audit access history (who queried audit records) |
+| `POST` | `/internal/v1/audit/checkpoints` | Generate manual cryptographic checkpoint hash |
+
+### Test Coverage: 12/12 ✅
+| Test | Scenario |
+|---|---|
+| TEST-1 | Duplicate Kafka events result in exactly one audit record (idempotency) |
+| TEST-2 | 5 sequential records maintain unbroken SHA-256 cryptographic hash chaining |
+| TEST-3 | Simulated SQL database attack/tampering is detected with exact sequence number identified |
+| TEST-4 | Sensitive card numbers, CVVs, and passwords in payload are redacted into `[REDACTED]` |
+| TEST-5 | Mandatory meta-audit logging on every audit record search |
+| TEST-6 | RBAC enforcement — unauthorized roles return `403 Forbidden` |
+| TEST-7 | Archival daemon exports old partitions and leaves an `AuditPartitionArchived` audit trail |
+
+---
+
+## 📜 12. License & Author
 
 - **Author:** [anhnhatdev](https://github.com/anhnhatdev)
 - **Project:** PayCore Fintech Microservices Platform
