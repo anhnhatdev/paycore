@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM eclipse-temurin:25-jdk-alpine AS builder
 WORKDIR /build
 COPY pom.xml .
 COPY src ./src
@@ -7,7 +7,7 @@ COPY ../pom.xml ../pom.xml
 RUN ./mvnw -pl ledger-service -am package -DskipTests
 
 # Stage 2: Runtime
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 RUN addgroup -S paycore && adduser -S paycore -G paycore

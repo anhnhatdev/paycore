@@ -1,9 +1,10 @@
 # 💳 PayCore — Enterprise Payment Platform Microservices
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Java-21%20LTS-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java 21" />
-  <img src="https://img.shields.io/badge/Spring%20Boot-3.4.2-6DB33F?style=for-the-badge&logo=springboot&logoColor=white" alt="Spring Boot 3" />
-  <img src="https://img.shields.io/badge/Spring%20Security-6.x-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white" alt="Spring Security" />
+  <img src="https://img.shields.io/badge/Java-25%20LTS-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java 25" />
+  <img src="https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F?style=for-the-badge&logo=springboot&logoColor=white" alt="Spring Boot 4.1.0" />
+  <img src="https://img.shields.io/badge/Spring%20Cloud-2025.1.0-6DB33F?style=for-the-badge&logo=spring&logoColor=white" alt="Spring Cloud" />
+  <img src="https://img.shields.io/badge/Spring%20Security-7.x-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white" alt="Spring Security" />
   <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
   <img src="https://img.shields.io/badge/Apache%20Kafka-3.8-231F20?style=for-the-badge&logo=apachekafka&logoColor=white" alt="Kafka" />
   <img src="https://img.shields.io/badge/Flyway-Migrations-CC0200?style=for-the-badge&logo=flyway&logoColor=white" alt="Flyway" />
@@ -131,6 +132,18 @@ accounts (id, user_id, account_number, currency, status, version, created_at, up
 refresh_tokens (id, user_id, token_hash, expires_at, revoked, device_info, created_at)
 ```
 
+### 4.3 API Reference
+#### Public Authentication Endpoints
+- `POST /api/v1/auth/register` — Register user & automatically create default VND account.
+- `POST /api/v1/auth/login` — Authenticate and receive `accessToken` (15m) + `refreshToken` (7d).
+- `POST /api/v1/auth/refresh` — Perform refresh token rotation.
+- `GET /api/v1/users/me` — Retrieve current profile (password hash omitted).
+- `GET /api/v1/accounts/me` — Retrieve user's wallet accounts *(balance omitted by design)*.
+- `POST /api/v1/accounts/{id}/freeze` — Freeze account *(Admin role required, publishes `AccountFrozen` event)*.
+
+#### Internal Inter-Service API (mTLS protected)
+- `GET /internal/v1/accounts/{accountId}/status` — Real-time account status verification for `transaction-service`.
+
 ---
 
 ## 📖 5. `ledger-service` Deep Dive
@@ -217,76 +230,6 @@ refresh_tokens (id, user_id, token_hash, expires_at, revoked, device_info, creat
   - `POST /internal/v1/fraud/review-queue/{checkId}/decide` — Admin manual `APPROVE` or `REJECT` decision.
   - `POST /internal/v1/fraud/blacklist` — Blacklist entry management (instantly syncs DB & Redis Set).
   - `PUT /internal/v1/fraud/rules/{ruleCode}` — Dynamic rule threshold adjustments.
-
----
-
-## 🚀 6. API Reference (`account-service`)
-
-### Public Authentication Endpoints
-- `POST /api/v1/auth/register` — Register user & automatically create default VND account.
-- `POST /api/v1/auth/login` — Authenticate and receive `accessToken` (15m) + `refreshToken` (7d).
-- `POST /api/v1/auth/refresh` — Perform refresh token rotation.
-- `GET /api/v1/users/me` — Retrieve current profile (password hash omitted).
-- `GET /api/v1/accounts/me` — Retrieve user's wallet accounts *(balance omitted by design)*.
-- `POST /api/v1/accounts/{id}/freeze` — Freeze account *(Admin role required, publishes `AccountFrozen` event)*.
-
-### Internal Inter-Service API (mTLS protected)
-- `GET /internal/v1/accounts/{accountId}/status` — Real-time account status verification for `transaction-service`.
-
----
-
-## 🧪 6. Automated Testing & Verification
-
-PayCore enforces automated testing for every layer:
-
-```bash
-# Run the complete test suite
-./mvnw clean test
-```
-
-### Test Coverage Highlights:
-- **`JwtUtilTest`**: Validates RS256 token generation, signature integrity, custom claims, and tamper detection.
-- **`AuthServiceTest`**: Comprehensive business flow testing covering duplicate handling, 5-attempt lockout, token rotation, and compromised token reuse detection.
-- **`AccountServiceTest`**: Account status mutations, freeze operations, and event emissions.
-- **`AuthControllerTest`**: Slice WebMvc tests verifying JSON payloads, validation errors, and standardized `ErrorResponse` formatting.
-- **`AuthFlowIntegrationTest`**: End-to-end integration test verifying registration $\rightarrow$ login $\rightarrow$ authenticated profile query $\rightarrow$ token rotation $\rightarrow$ reuse detection $\rightarrow$ logout.
-
----
-
-## 💻 7. Local Development Setup
-
-### Prerequisites
-- Java 21 LTS
-- Docker & Docker Compose
-- Maven 3.9+ (or use wrapper)
-
-### Step 1: Clone Repository
-```bash
-git clone https://github.com/anhnhatdev/paycore.git
-cd paycore
-```
-
-### Step 2: Generate RSA Keypair (for local dev)
-```bash
-mkdir -p account-service/src/main/resources/keys
-openssl genrsa -out account-service/src/main/resources/keys/private.pem 2048
-openssl rsa -in account-service/src/main/resources/keys/private.pem -pubout -out account-service/src/main/resources/keys/public.pem
-```
-
-### Step 3: Launch PostgreSQL Database
-```bash
-cd account-service
-docker compose up account-db -d
-```
-
-### Step 4: Run the Service
-```bash
-../mvnw spring-boot:run -pl account-service -Dspring-boot.run.profiles=local
-```
-
-Access Swagger UI documentation at: **`http://localhost:8081/swagger-ui.html`**
-
----
 
 ## 🔔 9. Notification Service — Architecture & Idempotency Protocol
 
@@ -454,7 +397,60 @@ Audit logs require explicit `COMPLIANCE` or `ADMIN` roles in gateway headers (`X
 
 ---
 
-## 📜 12. License & Author
+## 🧪 12. Automated Testing & Verification
+
+PayCore enforces automated testing for every layer:
+
+```bash
+# Run the complete test suite
+./mvnw clean test
+```
+
+### Test Coverage Highlights:
+- **`JwtUtilTest`**: Validates RS256 token generation, signature integrity, custom claims, and tamper detection.
+- **`AuthServiceTest`**: Comprehensive business flow testing covering duplicate handling, 5-attempt lockout, token rotation, and compromised token reuse detection.
+- **`AccountServiceTest`**: Account status mutations, freeze operations, and event emissions.
+- **`AuthControllerTest`**: Slice WebMvc tests verifying JSON payloads, validation errors, and standardized `ErrorResponse` formatting.
+- **`AuthFlowIntegrationTest`**: End-to-end integration test verifying registration $\rightarrow$ login $\rightarrow$ authenticated profile query $\rightarrow$ token rotation $\rightarrow$ reuse detection $\rightarrow$ logout.
+
+---
+
+## 💻 13. Local Development Setup
+
+### Prerequisites
+- Java 25 LTS
+- Docker & Docker Compose
+- Maven 3.9+ (or use wrapper)
+
+### Step 1: Clone Repository
+```bash
+git clone https://github.com/anhnhatdev/paycore.git
+cd paycore
+```
+
+### Step 2: Generate RSA Keypair (for local dev)
+```bash
+mkdir -p account-service/src/main/resources/keys
+openssl genrsa -out account-service/src/main/resources/keys/private.pem 2048
+openssl rsa -in account-service/src/main/resources/keys/private.pem -pubout -out account-service/src/main/resources/keys/public.pem
+```
+
+### Step 3: Launch PostgreSQL Database
+```bash
+cd account-service
+docker compose up account-db -d
+```
+
+### Step 4: Run the Service
+```bash
+../mvnw spring-boot:run -pl account-service -Dspring-boot.run.profiles=local
+```
+
+Access Swagger UI documentation at: **`http://localhost:8081/swagger-ui.html`**
+
+---
+
+## 📜 14. License & Author
 
 - **Author:** [anhnhatdev](https://github.com/anhnhatdev)
 - **Project:** PayCore Fintech Microservices Platform

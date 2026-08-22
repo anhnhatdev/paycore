@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM eclipse-temurin:25-jdk-alpine AS builder
 WORKDIR /app
 
 COPY pom.xml /app/pom.xml
@@ -12,7 +12,7 @@ COPY transaction-service/src /app/transaction-service/src
 RUN mvn -pl transaction-service clean package -DskipTests
 
 # Stage 2: Runtime
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 RUN addgroup -S paycore && adduser -S paycore -G paycore
